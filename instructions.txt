@@ -1,0 +1,150 @@
+Default.aspx
+<%@ Page Language="C#" AutoEventWireup="true" CodeFile="Default.aspx.cs" Inherits="_Default" %>
+<!DOCTYPE html>
+<html>
+<head runat="server">
+    <title>ToDo List</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" />
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+    <form id="form1" runat="server">
+        <div class="container mt-5">
+            <h2 class="mb-4">ToDo List</h2>
+            <div class="form-group">
+                <asp:TextBox ID="txtTask" runat="server" CssClass="form-control" placeholder="Enter a task" />
+            </div>
+            <asp:Button ID="btnAdd" runat="server" Text="Add Task" CssClass="btn btn-primary mb-3" OnClick="btnAdd_Click" />
+            <asp:GridView ID="gvTasks" runat="server" AutoGenerateColumns="False" CssClass="table table-bordered" OnRowCommand="gvTasks_RowCommand">
+                <Columns>
+                    <asp:BoundField DataField="Id" HeaderText="ID" ReadOnly="True" />
+                    <asp:BoundField DataField="TaskName" HeaderText="Task" />
+                    <asp:TemplateField>
+                        <ItemTemplate>
+                            <asp:Button ID="btnDelete" runat="server" Text="Delete" CommandName="Delete" CommandArgument='<%# Eval("Id") %>' CssClass="btn btn-danger btn-sm" />
+                        </ItemTemplate>
+                    </asp:TemplateField>
+                </Columns>
+            </asp:GridView>
+        </div>
+    </form>
+</body>
+</html>
+
+
+
+
+Default.aspx.cs
+using System;
+using System.Data;
+using System.Data.SqlClient;
+using System.Configuration;
+using System.Web.UI;
+
+public partial class _Default : Page
+{
+    private string connStr = ConfigurationManager.ConnectionStrings["constr"].ConnectionString;
+
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        if (!IsPostBack)
+        {
+            EnsureTableExists();
+            LoadTasks();
+        }
+    }
+
+    private void EnsureTableExists()
+    {
+        using (SqlConnection conn = new SqlConnection(connStr))
+        {
+            string checkAndCreateQuery = @"
+                IF NOT EXISTS (
+                    SELECT * FROM INFORMATION_SCHEMA.TABLES 
+                    WHERE TABLE_NAME = 'Tasks' AND TABLE_SCHEMA = 'dbo'
+                )
+                BEGIN
+                    CREATE TABLE dbo.Tasks (
+                        Id INT PRIMARY KEY IDENTITY(1,1),
+                        TaskName NVARCHAR(255) NOT NULL
+                    )
+                END";
+
+            SqlCommand cmd = new SqlCommand(checkAndCreateQuery, conn);
+            conn.Open();
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    protected void btnAdd_Click(object sender, EventArgs e)
+    {
+        string task = txtTask.Text.Trim();
+        if (string.IsNullOrEmpty(task)) return;
+
+        using (SqlConnection conn = new SqlConnection(connStr))
+        {
+            string query = "INSERT INTO dbo.Tasks (TaskName) VALUES (@Task)";
+            SqlCommand cmd = new SqlCommand(query, conn);
+            cmd.Parameters.AddWithValue("@Task", task);
+            conn.Open();
+            cmd.ExecuteNonQuery();
+        }
+
+        txtTask.Text = "";
+        LoadTasks();
+    }
+
+    protected void gvTasks_RowCommand(object sender, System.Web.UI.WebControls.GridViewCommandEventArgs e)
+    {
+        if (e.CommandName == "Delete")
+        {
+            int taskId = Convert.ToInt32(e.CommandArgument);
+
+            using (SqlConnection conn = new SqlConnection(connStr))
+            {
+                string query = "DELETE FROM dbo.Tasks WHERE Id = @Id";
+                SqlCommand cmd = new SqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@Id", taskId);
+                conn.Open();
+                cmd.ExecuteNonQuery();
+            }
+
+            LoadTasks();
+        }
+    }
+
+    private void LoadTasks()
+    {
+        using (SqlConnection conn = new SqlConnection(connStr))
+        {
+            string query = "SELECT Id, TaskName FROM dbo.Tasks ORDER BY Id DESC";
+            SqlDataAdapter da = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            da.Fill(dt);
+            gvTasks.DataSource = dt;
+            gvTasks.DataBind();
+        }
+    }
+}
+
+
+
+web.config
+
+<?xml version="1.0"?>
+<configuration>
+ <connectionStrings>
+    <add name="ToDoConn" connectionString="Data Source=208.91.198.59;Initial Catalog=ToDoDB;uid=todo_user; Password=todo_user;Integrated Security=false" providerName="System.Data.SqlClient" />
+  </connectionStrings>
+  <system.web>
+    <compilation debug="true" targetFramework="4.5" />
+    <pages>
+      <namespaces>
+        <add namespace="System.Data" />
+        <add namespace="System.Web.UI" />
+        <add namespace="System.Data.SqlClient" />
+      </namespaces>
+    </pages>
+  </system.web>
+</configuration>
